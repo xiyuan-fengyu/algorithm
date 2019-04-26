@@ -1,5 +1,7 @@
-import visualization.MyTreeMap;
-import visualization.TreeMapRender;
+package visualization.treeMap;
+
+import visualization.treeMap.MyTreeMap;
+import visualization.treeMap.TreeMapRender;
 
 /**
  * Created by xiyuan_fengyu on 2019/4/22 15:36.
