@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Red Black Tree</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="col-md-3">
+        <div>
+            <div class="form-group">
+                <label for="steps">Steps</label>
+                <textarea class="form-control" id="steps" rows="15">
+config.stepWait=20
+clear()
+put(1, 1)
+put(6, 6)
+put(3, 3)
+put(2, 2)
+put(7, 7)
+put(5, 5)
+put(8, 8)
+put(4, 4)
+put(5, "555")
+config.stepWait=-1
+remove(6)
+remove(4)
+remove(3)
+</textarea>
+            </div>
+            <button id="execute" type="submit" class="btn btn-primary">Execute</button>
+            <button id="next" type="submit" class="btn btn-info" style="display: none">Next</button>
+        </div>
+    </div>
+    <div class="col-md-9">
+        <div id="treeMap"></div>
+    </div>
+</div>
+
+<script src="https://cdn.bootcss.com/jquery/3.4.0/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+<script>
+    const RED = false;
+    const BLACK = true;
+
+    function parentOf(p) {
+        return p == null ? null : p.parent;
+    }
+
+    function leftOf(p) {
+        return (p == null) ? null: p.left;
+    }
+
+    function rightOf(p) {
+        return (p == null) ? null: p.right;
+    }
+
+    function colorOf(p) {
+        return (p == null) ? BLACK : p.color;
+    }
+
+    class Entry {
+        key;
+        value;
+        left;
+        right;
+        parent;
+        color = BLACK;
+
+        constructor(key, value, parent) {
+            this.key = key;
+            this.value = value;
+            this.parent = parent;
+        }
+
+        setValue(value) {
+            const oldV = this.value;
+            this.value = value;
+            return oldV;
+        }
+    }
+
+    class TreeMap {
+        size = 0;
+        root;
+        comparator;
+        notify;
+
+        constructor(comparator) {
+            this.comparator = comparator;
+        }
+
+        async clear() {
+            this.root = null;
+            this.size = 0;
+            await this.notify({type: "clear", target: this});
+        }
+
+        async remove(key) {
+            console.log("remove(" + key + ")");
+            const p = await this.getEntry(key);
+            if (p == null)
+                return null;
+
+            const oldValue = p.value;
+            await this.deleteEntry(p);
+            return oldValue;
+        }
+
+        async getEntry(key) {
+            let p = this.root;
+            while (p != null) {
+                await this.notify({type: "visitEntry", target: this, entry: p});
+                const cmp = this.comparator(key, p.key);
+                if (cmp < 0)
+                    p = p.left;
+                else if (cmp > 0)
+                    p = p.right;
+                else
+                    return p;
+            }
+            return null;
+        }
+
+        async deleteEntry(p) {
+            this.size--;
+
+            if (p.left != null && p.right != null) {
+                const s = await this.successor(p);
+                p.key = s.key;
+                p.value = s.value;
+                await this.notify({type: "updateEntry", target: this, entry: p});
+                p = s;
+            }
+
+            const replacement = (p.left != null ? p.left : p.right);
+
+            if (replacement != null) {
+                await this.notify({type: "unlinkEntry", target: this, entry: p});
+                replacement.parent = p.parent;
+                if (p.parent == null)
+                    this.root = replacement;
+                else if (p === p.parent.left)
+                    p.parent.left  = replacement;
+                else
+                    p.parent.right = replacement;
+
+                p.left = p.right = p.parent = null;
+
+                await this.notify({type: "refresh", target: this});
+
+                if (p.color === BLACK)
+                    await this.fixAfterDeletion(replacement);
+            } else if (p.parent == null) { // return if we are the only node.
+                await this.notify({type: "unlinkEntry", target: this, entry: p});
+                this.root = null;
+                await this.notify({type: "refresh", target: this});
+            } else { //  No children. Use self as phantom replacement and unlink.
+                if (p.color === BLACK)
+                    await this.fixAfterDeletion(p);
+
+                await this.notify({type: "unlinkEntry", target: this, entry: p});
+                if (p.parent != null) {
+                    if (p === p.parent.left)
+                        p.parent.left = null;
+                    else if (p === p.parent.right)
+                        p.parent.right = null;
+                    p.parent = null;
+                }
+                await this.notify({type: "refresh", target: this});
+            }
+        }
+
+        async successor(t) {
+            await this.notify({type: "findSuccessor", target: this, entry: t});
+            if (t == null)
+                return null;
+            else if (t.right != null) {
+                let p = t.right;
+                await this.notify({type: "visitEntry", target: this, entry: p});
+                while (p.left != null) {
+                    p = p.left;
+                    await this.notify({type: "visitEntry", target: this, entry: p});
+                }
+                return p;
+            } else {
+                let p = t.parent;
+                let ch = t;
+                await this.notify({type: "visitEntry", target: this, entry: p});
+                while (p != null && ch === p.right) {
+                    ch = p;
+                    p = p.parent;
+                    await this.notify({type: "visitEntry", target: this, entry: p});
+                }
+                return p;
+            }
+        }
+
+        async fixAfterDeletion(x) {
+            while (x !== this.root && colorOf(x) === BLACK) {
+                if (x === leftOf(parentOf(x))) {
+                    let sib = rightOf(parentOf(x));
+
+                    if (colorOf(sib) === RED) {
+                        await this.setColor(sib, BLACK);
+                        await this.setColor(parentOf(x), RED);
+                        await this.rotateLeft(parentOf(x));
+                        sib = rightOf(parentOf(x));
+
+                    }
+
+                    if (colorOf(leftOf(sib))  === BLACK &&
+                        colorOf(rightOf(sib)) === BLACK) {
+                        await this.setColor(sib, RED);
+                        x = parentOf(x);
+
+                    } else {
+                        if (colorOf(rightOf(sib)) === BLACK) {
+                            await this.setColor(leftOf(sib), BLACK);
+                            await this.setColor(sib, RED);
+                            await this.rotateRight(sib);
+                            sib = rightOf(parentOf(x));
+
+                        }
+                        await this.setColor(sib, colorOf(parentOf(x)));
+                        await this.setColor(parentOf(x), BLACK);
+                        await this.setColor(rightOf(sib), BLACK);
+                        await this.rotateLeft(parentOf(x));
+                        x = root;
+
+                    }
+                } else { // symmetric
+                    let sib = leftOf(parentOf(x));
+
+                    if (colorOf(sib) === RED) {
+                        await this.setColor(sib, BLACK);
+                        await this.setColor(parentOf(x), RED);
+                        await this.rotateRight(parentOf(x));
+                        sib = leftOf(parentOf(x));
+
+                    }
+
+                    if (colorOf(rightOf(sib)) === BLACK &&
+                        colorOf(leftOf(sib)) === BLACK) {
+                        await this.setColor(sib, RED);
+                        x = parentOf(x);
+
+                    } else {
+                        if (colorOf(leftOf(sib)) === BLACK) {
+                            await this.setColor(rightOf(sib), BLACK);
+                            await this.setColor(sib, RED);
+                            await this.rotateLeft(sib);
+                            sib = leftOf(parentOf(x));
+
+                        }
+                        await this.setColor(sib, colorOf(parentOf(x)));
+                        await this.setColor(parentOf(x), BLACK);
+                        await this.setColor(leftOf(sib), BLACK);
+                        await this.rotateRight(parentOf(x));
+                        x = this.root;
+
+                    }
+                }
+            }
+
+            await this.setColor(x, BLACK);
+        }
+
+        async put(key, value) {
+            console.log("put(" + key + ", " + value + ")");
+
+            let t = this.root;
+            if (t == null) {
+                this.comparator(key, key);
+                this.root = new Entry(key, value, null);
+                await this.notify({type: "addEntry", target: this, entry: this.root});
+                this.size = 1;
+                return null;
+            }
+            let cmp;
+            let parent;
+            do {
+                await this.notify({type: "visitEntry", target: this, entry: t});
+                parent = t;
+                cmp = this.comparator(key, t.key);
+                if (cmp < 0)
+                    t = t.left;
+                else if (cmp > 0)
+                    t = t.right;
+                else {
+                    const oldV = t.setValue(value);
+                    await this.notify({type: "updateEntry", target: this, entry: t});
+                    return oldV;
+                }
+            } while (t != null);
+
+            const e = new Entry(key, value, parent);
+            if (cmp < 0)
+                parent.left = e;
+            else
+                parent.right = e;
+            await this.notify({type: "addEntry", target: this, entry: e});
+
+            await this.fixAfterInsertion(e);
+
+            this.size++;
+            return null;
+        }
+
+        async fixAfterInsertion(x) {
+            await this.setColor(x, RED);
+
+            while (x != null && x !== this.root && colorOf(x.parent) === RED) {
+                if (parentOf(x) === leftOf(parentOf(parentOf(x)))) {
+                    const y = rightOf(parentOf(parentOf(x)));
+                    if (colorOf(y) === RED) {
+                        await this.setColor(parentOf(x), BLACK);
+                        await this.setColor(y, BLACK);
+                        await this.setColor(parentOf(parentOf(x)), RED);
+                        x = parentOf(parentOf(x));
+
+                    } else {
+                        if (x === rightOf(parentOf(x))) {
+                            x = parentOf(x);
+                            await this.rotateLeft(x);
+                        }
+                        await this.setColor(parentOf(x), BLACK);
+                        await this.setColor(parentOf(parentOf(x)), RED);
+                        await this.rotateRight(parentOf(parentOf(x)));
+                    }
+                } else {
+                    const y = leftOf(parentOf(parentOf(x)));
+                    if (colorOf(y) === RED) {
+                        await this.setColor(parentOf(x), BLACK);
+                        await this.setColor(y, BLACK);
+                        await this.setColor(parentOf(parentOf(x)), RED);
+
+                        x = parentOf(parentOf(x));
+
+                    } else {
+                        if (x === leftOf(parentOf(x))) {
+                            x = parentOf(x);
+                            await this.rotateRight(x);
+                        }
+                        await this.setColor(parentOf(x), BLACK);
+                        await this.setColor(parentOf(parentOf(x)), RED);
+                        await this.rotateLeft(parentOf(parentOf(x)));
+                    }
+                }
+            }
+
+            await this.setColor(this.root, BLACK);
+        }
+
+        async rotateLeft(p) {
+            await this.notify({type: "rotateEntry", state: "left", target: this, entry: p});
+            if (p != null) {
+                let r = p.right;
+                p.right = r.left;
+                if (r.left != null)
+                    r.left.parent = p;
+                r.parent = p.parent;
+                if (p.parent == null)
+                    this.root = r;
+                else if (p.parent.left === p)
+                    p.parent.left = r;
+                else
+                    p.parent.right = r;
+                r.left = p;
+                p.parent = r;
+            }
+            await this.notify({type: "rotateEntry", state: "finish", target: this, entry: p});
+        }
+
+        async rotateRight(p) {
+            await this.notify({type: "rotateEntry", state: "right", target: this, entry: p});
+            if (p != null) {
+                const l = p.left;
+                p.left = l.right;
+                if (l.right != null) l.right.parent = p;
+                l.parent = p.parent;
+                if (p.parent == null)
+                    this.root = l;
+                else if (p.parent.right === p)
+                    p.parent.right = l;
+                else p.parent.left = l;
+                l.right = p;
+                p.parent = l;
+            }
+            await this.notify({type: "rotateEntry", state: "finish", target: this, entry: p});
+        }
+
+        async setColor(p, c) {
+            if (p != null)
+                p.color = c;
+            await this.notify({type: "updateEntry", target: this, entry: p});
+        }
+
+    }
+
+    const defaultTreeMapRenderConfig = {
+        radius: 32,
+        borderSize: 4,
+        borderColor: "transparent",
+        focusBorderColor: "#2196ff",
+        redColor: "#ff490d",
+        blackColor: "#353535",
+        textColor: "#ffffff",
+        textSize: "14px",
+        lineColor: "#cccccc",
+        lineSize: 1,
+        padding: 8,
+
+        stepWait: 1000
+    };
+
+    class TreeMapRender {
+
+        $container;
+
+        config;
+
+        entryNodeMap = new Map();
+
+        constructor($container, config) {
+            this.$container = $container;
+            this.config = Object.assign({}, defaultTreeMapRenderConfig);
+            if (config) {
+                Object.assign(this.config, config);
+            }
+        }
+
+        drawLine($lines, fromNode, toNode) {
+            const fromX = fromNode.x * this.config.radius + this.config.padding;
+            const fromY = fromNode.y * this.config.radius + this.config.padding;
+            const toX = toNode.x * this.config.radius + this.config.padding;
+            const toY = toNode.y * this.config.radius + this.config.padding;
+            $lines.append(`
+            <line x1="${fromX}" y1="${fromY}" x2="${toX}" y2="${toY}" stroke="${this.config.lineColor}" stroke-width="${this.config.lineSize}" style="z-index: 0;"/>
+            `);
+        }
+
+        drawNode($svg, node) {
+            const x = node.x * this.config.radius + this.config.padding;
+            const y = node.y * this.config.radius + this.config.padding;
+            $svg.append(`
+             <g data-xy="${node.x + ',' + node.y}" transform="translate(${x}, ${y})" fill="none" style="z-index: 1;">
+                <circle cx="0" cy="0" r="${this.config.radius}" stroke="${this.config.borderColor}" stroke-width="${this.config.borderSize}" fill="${node.entry.color ? this.config.blackColor : this.config.redColor}"/>
+                <line x1="-${this.config.radius - this.config.borderSize / 4}" y1="0" x2="${this.config.radius - this.config.borderSize / 4}" y2="0" stroke="${this.config.textColor}" stroke-width="1"/>
+                <text class="key" fill="${this.config.textColor}" font-size="${this.config.textSize}" y="-4" text-anchor="middle" dominant-baseline="text-after-edge">${'' + node.entry.key}</text>
+                <text class="value" fill="${this.config.textColor}" font-size="${this.config.textSize}" y="4" text-anchor="middle" dominant-baseline="text-before-edge">${'' + node.entry.value}</text>
+            </g>
+            `);
+        }
+
+        async redraw(treeMap) {
+            this.entryNodeMap.clear();
+            this.$container.children().remove();
+
+            const lines = this.computPos(treeMap.root);
+            if (lines) {
+                const maxX = this.maxX(lines);
+
+                const width = (maxX + 1) * this.config.radius + this.config.padding * 2;
+                const height = (3 * lines.length - 1) * this.config.radius + this.config.padding * 2;
+                const $svg = $(`
+            <svg width="${width}" height="${height}">
+                <g class="lines"/>
+            </svg>
+            `);
+                const $svgLines = $svg.find("g.lines");
+
+                for (let line of lines) {
+                    for (let item of line) {
+                        let parent = item.parent;
+                        if (parent) {
+                            this.drawLine($svgLines, parent, item);
+                        }
+                        this.entryNodeMap.set(item.entry, item);
+                        this.drawNode($svg, item);
+                    }
+                }
+
+                this.$container.html($svg[0].outerHTML);
+            }
+        }
+
+        maxX(lines) {
+            let max = 0;
+            for (let i = 0, len = lines.length; i < len; i++) {
+                const line = lines[i];
+                max = Math.max(max, line[line.length - 1].x);
+            }
+            return max;
+        }
+
+        computPos(entry) {
+            const lines = this.computPosX(treeMap.root);
+            if (lines) {
+                for (let i = 0, y = 1, len = lines.length; i < len; i++, y += 3) {
+                    const line = lines[i];
+                    for (let item of line) {
+                        item.y = y;
+                    }
+                }
+            }
+            return lines;
+        }
+
+        computPosX(entry) {
+            if (entry == null) {
+                return null;
+            }
+
+            const leftRes = this.computPosX(entry.left);
+            const rightRes = this.computPosX(entry.right);
+            if (leftRes != null && rightRes != null) {
+                const maxX = this.maxX(leftRes);
+                const leftLen = leftRes.length;
+                const rightLen = rightRes.length;
+                const minLen = Math.min(leftLen, rightLen);
+                const maxLen = Math.max(leftLen, rightLen);
+                let minDis = maxX;
+                let firstLineDis = 0;
+                for (let i = 0; i < minLen; i++) {
+                    const leftLine = leftRes[i];
+                    const rightLine = rightRes[i];
+                    const lineDis = maxX - leftLine[leftLine.length - 1].x + rightLine[0].x - 1;
+                    minDis = Math.min(minDis, lineDis);
+                    if (i === 0) {
+                        firstLineDis = lineDis;
+                    }
+                }
+
+                const xDisDelta = 2 - minDis;
+                const newHeadInfo = {
+                    x: leftRes[0][0].x + 1 + (firstLineDis + xDisDelta) / 2,
+                    entry: entry
+                };
+                const newRes = [[newHeadInfo]];
+                leftRes[0][0].parent = newHeadInfo;
+                rightRes[0][0].parent = newHeadInfo;
+
+                const rightXDelta = maxX + xDisDelta + 1;
+                for (let i = 0; i < maxLen; i++) {
+                    const newLine = [];
+                    if (i < leftLen) {
+                        const leftLine = leftRes[i];
+                        for (let item of leftLine) {
+                            newLine.push(item);
+                        }
+                    }
+                    if (i < rightLen) {
+                        const rightLine = rightRes[i];
+                        for (let item of rightLine) {
+                            item.x += rightXDelta;
+                            newLine.push(item);
+                        }
+                    }
+                    newRes.push(newLine);
+                }
+                return newRes;
+            }
+            else if (leftRes != null) {
+                const headInfo = leftRes[0][0];
+                let newHeadInfo = {
+                    x: headInfo.x + 2,
+                    entry: entry
+                };
+                headInfo.parent = newHeadInfo;
+
+                const newRes = [];
+                newRes[0] = [newHeadInfo];
+                for (let leftLine of leftRes) {
+                    newRes.push(leftLine);
+                }
+                return newRes;
+            }
+            else if (rightRes != null) {
+                const headInfo = rightRes[0][0];
+                let newHeadInfo;
+                let xDelta = 0;
+                if (headInfo.x >= 3) {
+                    newHeadInfo = {
+                        x: headInfo.x - 2,
+                        entry: entry
+                    };
+                }
+                else {
+                    xDelta = (3 - headInfo.x);
+                    newHeadInfo = {
+                        x: 1,
+                        entry: entry
+                    };
+                }
+                headInfo.parent = newHeadInfo;
+
+                const newRes = [];
+                newRes[0] = [newHeadInfo];
+                for (let rightLine of rightRes) {
+                    rightLine.forEach(item => {
+                       item.x += xDelta;
+                    });
+                    newRes.push(rightLine);
+                }
+                return newRes;
+            }
+            else {
+                return [[{
+                    x: 1,
+                    entry: entry
+                }]];
+            }
+        }
+
+        async focusNode(entry) {
+            const node = this.entryNodeMap.get(entry);
+            if (node) {
+                const circle = this.$container.find("g[data-xy='" + node.x + ',' + node.y + "'] circle");
+                circle.attr("stroke", this.config.focusBorderColor);
+                this.sleep(500).then(() => {
+                    circle.attr("stroke", this.config.borderColor);
+                });
+            }
+        }
+
+        async updateNode(entry) {
+            const node = this.entryNodeMap.get(entry);
+            if (node) {
+                const g = this.$container.find("g[data-xy='" + node.x + ',' + node.y + "']");
+                g.find("circle").attr("fill", entry.color ? this.config.blackColor : this.config.redColor);
+                g.find("text.key").text('' + entry.key);
+                g.find("text.value").text('' + entry.value);
+            }
+        }
+
+        curWaits = [];
+        wait() {
+            const time = this.config.stepWait;
+            if (time) {
+                return new Promise(resolve => {
+                    if (time === -1) {
+                        $("#next").show();
+                        this.curWaits.push(resolve);
+                    }
+                    else {
+                        setTimeout(resolve, time);
+                    }
+                });
+            }
+        }
+
+        waitContinueOne() {
+            const len = this.curWaits.length;
+            if (len > 0) {
+                const last = this.curWaits[len - 1];
+                this.curWaits.splice(len - 1);
+                last();
+            }
+            if (this.curWaits.length === 0) {
+                $("#next").hide();
+            }
+        }
+
+        sleep(time) {
+            return new Promise(resolve => {
+                setTimeout(resolve, time);
+            });
+        }
+
+    }
+
+    const entryFormatter = entry => "(" + (colorOf(entry) ? "BLACK" : "RED") + "," + (entry != null ? entry.key + "=" + entry.value : "null") + ")";
+
+    const treeMap = new TreeMap((o1, o2) => {
+        if (o1 === o2) {
+            return 0;
+        }
+        return o1 < o2 ? -1 : 1;
+    });
+    const treeMapRender = new TreeMapRender($("#treeMap"), {stepWait: 1000});
+    treeMap.notify = async event => {
+        if (event.type === "clear") {
+            console.log("clear");
+            await treeMapRender.redraw(event.target);
+        }
+        else if (event.type === "addEntry") {
+            console.log("add entry" + entryFormatter(event.entry));
+            await treeMapRender.redraw(event.target);
+            treeMapRender.focusNode(event.entry);
+        }
+        else if (event.type === "rotateEntry") {
+            if (event.state === "finish") {
+                console.log("rotate finish");
+                await treeMapRender.redraw(event.target);
+            }
+            else {
+                console.log(event.state + " rotate entry" + entryFormatter(event.entry));
+            }
+            treeMapRender.focusNode(event.entry);
+        }
+        else if (event.type === "visitEntry") {
+            console.log("visit entry" + entryFormatter(event.entry));
+            await treeMapRender.focusNode(event.entry);
+        }
+        else if (event.type === "updateEntry") {
+            console.log("update entry" + entryFormatter(event.entry));
+            treeMapRender.focusNode(event.entry);
+            await treeMapRender.updateNode(event.entry);
+        }
+        else if (event.type === "findSuccessor") {
+            console.log("find successor of entry" + entryFormatter(event.entry));
+            treeMapRender.focusNode(event.entry);
+        }
+        else if (event.type === "unlinkEntry") {
+            console.log("unlink entry" + entryFormatter(event.entry));
+            treeMapRender.focusNode(event.entry);
+        }
+        else if (event.type === "refresh") {
+            await treeMapRender.redraw(event.target);
+        }
+        await treeMapRender.wait();
+    };
+
+    (async () => {
+
+        $("#execute").on("click", async e => {
+            const steps = $("#steps").val().split('\n').filter(item => item.trim().length > 0);
+
+            const $next = $("#next");
+            $next.on("click", e => {
+                treeMapRender.waitContinueOne();
+            });
+
+            treeMapRender.curWaits.splice(0, treeMapRender.curWaits.length);
+            if (treeMapRender.config.stepWait === -1) {
+                await treeMapRender.wait();
+            }
+
+            for (let step of steps) {
+                if (step.startsWith("config.")) {
+                    const oldStepWait = treeMapRender.config.stepWait;
+                    await eval("treeMapRender." + step);
+                    if (oldStepWait !== -1 && treeMapRender.config.stepWait === -1) {
+                        await treeMapRender.wait();
+                    }
+                }
+                else {
+                    await eval("treeMap." + step);
+                }
+            }
+        });
+    })();
+
+</script>
+</body>
+</html>
