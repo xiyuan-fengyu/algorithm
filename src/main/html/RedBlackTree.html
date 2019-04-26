@@ -438,7 +438,8 @@ remove(3)
             const toX = toNode.x * this.config.radius + this.config.padding;
             const toY = toNode.y * this.config.radius + this.config.padding;
             $lines.append(`
-            <line x1="${fromX}" y1="${fromY}" x2="${toX}" y2="${toY}" stroke="${this.config.lineColor}" stroke-width="${this.config.lineSize}" style="z-index: 0;"/>
+            <line data-from-xy="${fromNode.x + ',' + fromNode.y}" data-to-xy="${toNode.x + ',' + toNode.y}"
+            x1="${fromX}" y1="${fromY}" x2="${toX}" y2="${toY}" stroke="${this.config.lineColor}" stroke-width="${this.config.lineSize}" style="z-index: 0;"/>
             `);
         }
 
@@ -466,10 +467,10 @@ remove(3)
                 const width = (maxX + 1) * this.config.radius + this.config.padding * 2;
                 const height = (3 * lines.length - 1) * this.config.radius + this.config.padding * 2;
                 const $svg = $(`
-            <svg width="${width}" height="${height}">
-                <g class="lines"/>
-            </svg>
-            `);
+                <svg width="${width}" height="${height}">
+                    <g class="lines"/>
+                </svg>
+                `);
                 const $svgLines = $svg.find("g.lines");
 
                 for (let line of lines) {
@@ -636,6 +637,21 @@ remove(3)
             }
         }
 
+        async unlinkNode(entry) {
+            const node = this.entryNodeMap.get(entry);
+            if (node) {
+                const circle = this.$container.find("g[data-xy='" + node.x + ',' + node.y + "'] circle");
+                circle.attr("stroke", this.config.focusBorderColor);
+                this.sleep(250).then(() => {
+                    circle.attr("stroke", this.config.borderColor);
+                });
+                this.$container.find("line[data-from-xy='" + node.parent.x + ',' + node.parent.y + "'][data-to-xy='" + node.x + ',' + node.y + "']").fadeOut(150);
+                if (this.config.stepWait > 0){
+                    await this.sleep(this.config.stepWait)
+                }
+            }
+        }
+
         curWaits = [];
         wait() {
             const time = this.config.stepWait;
@@ -716,7 +732,7 @@ remove(3)
         }
         else if (event.type === "unlinkEntry") {
             console.log("unlink entry" + entryFormatter(event.entry));
-            treeMapRender.focusNode(event.entry);
+            await treeMapRender.unlinkNode(event.entry);
         }
         else if (event.type === "refresh") {
             await treeMapRender.redraw(event.target);
