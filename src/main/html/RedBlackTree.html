@@ -631,9 +631,41 @@ remove(3)
             const node = this.entryNodeMap.get(entry);
             if (node) {
                 const g = this.$container.find("g[data-xy='" + node.x + ',' + node.y + "']");
-                g.find("circle").attr("fill", entry.color ? this.config.blackColor : this.config.redColor);
-                g.find("text.key").text('' + entry.key);
-                g.find("text.value").text('' + entry.value);
+                if (this.config.stepWait === -1 || this.config.stepWait >= 500){
+                    const time = this.config.stepWait < 0 ? 150 : this.config.stepWait;
+
+                    const circle = g.find("circle");
+                    const newColor = entry.color ? this.config.blackColor : this.config.redColor;
+                    if (circle.attr("fill") !==  newColor) {
+                        circle.fadeOut(time, () => {
+                            circle.attr("fill", newColor);
+                            circle.fadeIn(time);
+                        });
+                    }
+
+                    const keyText = g.find("text.key");
+                    const newKey = '' + entry.key;
+                    if (keyText.text() !== newKey) {
+                        keyText.fadeOut(time, () => {
+                            keyText.text(newKey);
+                            keyText.fadeIn(time);
+                        });
+                    }
+
+                    const valueText = g.find("text.value");
+                    const newValue = '' + entry.value;
+                    if (valueText.text() !== newValue) {
+                        valueText.fadeOut(time, () => {
+                            valueText.text(newValue);
+                            valueText.fadeIn(time);
+                        });
+                    }
+                }
+                else {
+                    g.find("circle").attr("fill", entry.color ? this.config.blackColor : this.config.redColor);
+                    g.find("text.key").text('' + entry.key);
+                    g.find("text.value").text('' + entry.value);
+                }
             }
         }
 
