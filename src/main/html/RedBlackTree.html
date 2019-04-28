@@ -147,6 +147,8 @@ remove(3)
                 printLog("update entry" + entryFormatter(p) + " with successor" + entryFormatter(s) + "'s key/value");
                 p.key = s.key;
                 p.value = s.value;
+                printLog("entry" + entryFormatter(p) + ".key = " + s.key);
+                printLog("entry" + entryFormatter(p) + ".value = " + s.value);
                 await this.notify({type: "updateEntry", target: this, entry: p});
                 p = s;
             }
@@ -307,6 +309,7 @@ remove(3)
                     t = t.right;
                 else {
                     const oldV = t.setValue(value);
+                    printLog("entry" + entryFormatter(p) + ".value = " + value);
                     await this.notify({type: "updateEntry", target: this, entry: t});
                     return oldV;
                 }
@@ -410,6 +413,7 @@ remove(3)
 
         async setColor(p, c) {
             if (p != null)
+                printLog("entry" + entryFormatter(p) + ".color = " + (c ? "BLACK" : "RED"));
                 p.color = c;
             await this.notify({type: "updateEntry", target: this, entry: p});
         }
@@ -768,7 +772,6 @@ remove(3)
             await treeMapRender.focusNode(event.entry);
         }
         else if (event.type === "updateEntry") {
-            printLog("update entry" + entryFormatter(event.entry));
             treeMapRender.focusNode(event.entry);
             await treeMapRender.updateNode(event.entry);
         }
