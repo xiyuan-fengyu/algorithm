@@ -250,7 +250,7 @@ remove(3)
                         await this.setColor(parentOf(x), BLACK);
                         await this.setColor(rightOf(sib), BLACK);
                         await this.rotateLeft(parentOf(x));
-                        x = root;
+                        x = this.root;
 
                     }
                 } else { // symmetric
