@@ -5,7 +5,7 @@
     <title>Red Black Tree</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
 </head>
-<body>
+<body style="padding: 12px">
 
 <div class="container-fluid">
     <div class="col-md-3">
@@ -34,7 +34,11 @@ remove(3)
             <button id="next" type="submit" class="btn btn-info" style="display: none">Next</button>
         </div>
     </div>
-    <div class="col-md-9">
+    <div class="col-md-2">
+        <div id="logs" style="overflow-y: scroll; height: 60vh;"></div>
+        <button onclick="$('#logs').html('')" type="submit" class="btn btn-info">Clear</button>
+    </div>
+    <div class="col-md-7">
         <div id="treeMap"></div>
     </div>
 </div>
@@ -60,6 +64,15 @@ remove(3)
     function colorOf(p) {
         return (p == null) ? BLACK : p.color;
     }
+
+    const $logs = $("#logs");
+    const printLog = msg => {
+        console.log(msg);
+        $logs.append(`
+        <p>${msg}</p>
+        `);
+        $logs[0].scrollTop = $logs[0].scrollHeight;
+    };
 
     class Entry {
         key;
@@ -99,7 +112,7 @@ remove(3)
         }
 
         async remove(key) {
-            console.log("remove(" + key + ")");
+            printLog("remove(" + key + ")");
             const p = await this.getEntry(key);
             if (p == null)
                 return null;
@@ -269,7 +282,7 @@ remove(3)
         }
 
         async put(key, value) {
-            console.log("put(" + key + ", " + value + ")");
+            printLog("put(" + key + ", " + value + ")");
 
             let t = this.root;
             if (t == null) {
@@ -731,39 +744,39 @@ remove(3)
     const treeMapRender = new TreeMapRender($("#treeMap"), {stepWait: 1000});
     treeMap.notify = async event => {
         if (event.type === "clear") {
-            console.log("clear");
+            $("#logs").html("");
             await treeMapRender.redraw(event.target);
         }
         else if (event.type === "addEntry") {
-            console.log("add entry" + entryFormatter(event.entry));
+            printLog("add entry" + entryFormatter(event.entry));
             await treeMapRender.redraw(event.target);
             treeMapRender.focusNode(event.entry);
         }
         else if (event.type === "rotateEntry") {
             if (event.state === "finish") {
-                console.log("rotate finish");
+                printLog("rotate finish");
                 await treeMapRender.redraw(event.target);
             }
             else {
-                console.log(event.state + " rotate entry" + entryFormatter(event.entry));
+                printLog(event.state + " rotate entry" + entryFormatter(event.entry));
             }
             treeMapRender.focusNode(event.entry);
         }
         else if (event.type === "visitEntry") {
-            console.log("visit entry" + entryFormatter(event.entry));
+            printLog("visit entry" + entryFormatter(event.entry));
             await treeMapRender.focusNode(event.entry);
         }
         else if (event.type === "updateEntry") {
-            console.log("update entry" + entryFormatter(event.entry));
+            printLog("update entry" + entryFormatter(event.entry));
             treeMapRender.focusNode(event.entry);
             await treeMapRender.updateNode(event.entry);
         }
         else if (event.type === "findSuccessor") {
-            console.log("find successor of entry" + entryFormatter(event.entry));
+            printLog("find successor of entry" + entryFormatter(event.entry));
             treeMapRender.focusNode(event.entry);
         }
         else if (event.type === "unlinkEntry") {
-            console.log("unlink entry" + entryFormatter(event.entry));
+            printLog("unlink entry" + entryFormatter(event.entry));
             await treeMapRender.unlinkNode(event.entry);
         }
         else if (event.type === "refresh") {
