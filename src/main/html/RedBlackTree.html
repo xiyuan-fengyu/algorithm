@@ -309,7 +309,7 @@ remove(3)
                     t = t.right;
                 else {
                     const oldV = t.setValue(value);
-                    printLog("entry" + entryFormatter(p) + ".value = " + value);
+                    printLog("entry" + entryFormatter(t) + ".value = " + value);
                     await this.notify({type: "updateEntry", target: this, entry: t});
                     return oldV;
                 }
