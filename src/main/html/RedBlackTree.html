@@ -34,11 +34,11 @@ remove(3)
             <button id="next" type="submit" class="btn btn-info" style="display: none">Next</button>
         </div>
     </div>
-    <div class="col-md-2">
+    <div class="col-md-3">
         <div id="logs" style="overflow-y: scroll; height: 60vh;"></div>
         <button onclick="$('#logs').html('')" type="submit" class="btn btn-info">Clear</button>
     </div>
-    <div class="col-md-7">
+    <div class="col-md-6">
         <div id="treeMap"></div>
     </div>
 </div>
@@ -64,6 +64,8 @@ remove(3)
     function colorOf(p) {
         return (p == null) ? BLACK : p.color;
     }
+
+    const entryFormatter = entry => "(" + (colorOf(entry) ? "BLACK" : "RED") + "," + (entry != null ? entry.key + "=" + entry.value : "null") + ")";
 
     const $logs = $("#logs");
     const printLog = msg => {
@@ -142,6 +144,7 @@ remove(3)
 
             if (p.left != null && p.right != null) {
                 const s = await this.successor(p);
+                printLog("update entry" + entryFormatter(p) + " with successor" + entryFormatter(s) + "'s key/value");
                 p.key = s.key;
                 p.value = s.value;
                 await this.notify({type: "updateEntry", target: this, entry: p});
@@ -732,8 +735,6 @@ remove(3)
         }
 
     }
-
-    const entryFormatter = entry => "(" + (colorOf(entry) ? "BLACK" : "RED") + "," + (entry != null ? entry.key + "=" + entry.value : "null") + ")";
 
     const treeMap = new TreeMap((o1, o2) => {
         if (o1 === o2) {
